@@ -74,11 +74,29 @@ The worker command serves every configured queue unless ``--queue`` is passed
      - ``str``
      - ``"default"``
      - Temporal namespace where workflow executions and schedules are created.
+   * - ``API_KEY``
+     - ``str``
+     - ``None``
+     - Bearer token for Temporal Cloud or another hosted service. TLS is
+       enabled automatically; combining ``API_KEY`` with ``TLS: False``
+       raises ``ImproperlyConfigured``.
    * - ``TLS``
-     - ``bool``
+     - ``bool`` or ``dict``
      - ``False``
-     - Connect with TLS. Only the TLS switch is configurable; API keys and
-       client certificates for hosted services are not supported.
+     - Connect with TLS. A boolean enables or disables TLS with the system
+       trust store. A mapping enables TLS and configures certificates:
+       ``server_root_ca_cert`` (path to the root CA bundle), ``client_cert``
+       and ``client_private_key`` (paths to the mTLS certificate and key,
+       which must be given together), and ``domain`` (SNI host and the name
+       the server certificate is verified against). File paths are read when
+       the client connects.
+   * - ``ACTIVITY_TIMEOUT``
+     - ``timedelta`` or ``float``
+     - 24 hours
+     - Start-to-close timeout of the activity that runs each enqueued or
+       scheduled task, as a ``timedelta`` or a number of seconds. A task still
+       running after this long is timed out and its workflow fails. Applies
+       to tasks started by this backend, not to ``execute_task`` calls.
    * - ``SCHEDULES``
      - ``list``
      - ``[]``
@@ -86,8 +104,8 @@ The worker command serves every configured queue unless ``--queue`` is passed
        schema.
 
 Unknown option keys raise ``django.core.exceptions.ImproperlyConfigured``
-instead of being silently ignored. ``SCHEDULES`` is accepted here and consumed
-by the scheduler.
+instead of being silently ignored. ``SCHEDULES`` is consumed by the scheduler,
+and ``ACTIVITY_TIMEOUT`` by the enqueue path.
 
 Each ``SCHEDULES`` entry accepts these keys:
 
@@ -129,6 +147,46 @@ Each ``SCHEDULES`` entry accepts these keys:
      - Create the schedule paused. Defaults to ``False``.
 
 See :doc:`schedules` for validation rules, syncing, and examples.
+
+Hosted services
+---------------
+
+Temporal Cloud authenticates with an API key; TLS is enabled automatically:
+
+.. code-block:: python
+
+   import os
+
+   TASKS = {
+       "default": {
+           "BACKEND": "django_tasks_temporal.backend.TemporalTaskBackend",
+           "OPTIONS": {
+               "ADDRESS": "my-namespace.tmprl.cloud:7233",
+               "NAMESPACE": "my-namespace",
+               "API_KEY": os.environ["TEMPORAL_API_KEY"],
+           },
+       },
+   }
+
+Deployments that authenticate clients with certificates configure the
+``TLS`` mapping with file paths:
+
+.. code-block:: python
+
+   OPTIONS = {
+       "ADDRESS": "temporal.example.com:7233",
+       "NAMESPACE": "default",
+       "TLS": {
+           "server_root_ca_cert": "/etc/temporal/ca.pem",
+           "client_cert": "/etc/temporal/client.pem",
+           "client_private_key": "/etc/temporal/client-key.pem",
+           "domain": "temporal.example.com",
+       },
+   }
+
+Certificate files are read when a client is created, which happens once per
+event loop and option set. Rotate the files and restart the worker or process
+to pick them up.
 
 Connection options apply to the management commands and to enqueues made by the
 backend. Enqueuing a task requires a reachable Temporal server.

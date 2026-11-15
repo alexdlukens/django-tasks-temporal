@@ -16,6 +16,9 @@ ACTIVITY_NAME = "django_tasks_temporal.run_task"
 # Default Django backend alias used by the management commands.
 DEFAULT_BACKEND_ALIAS = "default"
 
+# Activity start-to-close timeout, in seconds, when ACTIVITY_TIMEOUT is unset.
+DEFAULT_ACTIVITY_TIMEOUT_SECONDS = 24 * 60 * 60
+
 
 @dataclass(frozen=True, slots=True)
 class TaskInput:
@@ -28,6 +31,8 @@ class TaskInput:
     task_path: str  # Dotted import path to the module-level Task instance.
     args: list[Any]
     kwargs: dict[str, Any]
+    # Defaulted so payloads written before this field existed still decode.
+    activity_timeout_seconds: float = DEFAULT_ACTIVITY_TIMEOUT_SECONDS
 
 
 def temporal_priority_key(django_priority: int) -> int:

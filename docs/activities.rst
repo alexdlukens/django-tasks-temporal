@@ -156,8 +156,9 @@ Enqueued tasks are attempted once. The workflow runs the activity with
 policy and Temporal's default would retry a failed activity until the workflow
 times out.
 
-Each activity has a start-to-close timeout of 24 hours
-(``DEFAULT_ACTIVITY_TIMEOUT``). A task still running after that is timed out
+Each activity has a start-to-close timeout from the backend's
+``ACTIVITY_TIMEOUT`` option (24 hours by default; see :doc:`configuration`).
+A task still running after that is timed out
 and the workflow fails. Exceptions raised by the task fail the workflow, and
 the exception class path and traceback are available on the task result; see
 :doc:`results`.

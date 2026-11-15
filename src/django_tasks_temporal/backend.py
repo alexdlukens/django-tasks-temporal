@@ -46,7 +46,12 @@ class TemporalTaskBackend(BaseTaskBackend):
         result_id = uuid.uuid4().hex
         await temporal.start_workflow(
             DjangoTaskWorkflow.run,
-            TaskInput(task.module_path, list(args), dict(kwargs)),
+            TaskInput(
+                task.module_path,
+                list(args),
+                dict(kwargs),
+                activity_timeout_seconds=client.get_activity_timeout(self.alias),
+            ),
             id=result_id,
             task_queue=task.queue_name,
             start_delay=_start_delay(task.run_after),

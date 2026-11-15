@@ -31,7 +31,8 @@ default data converter serializes it as JSON:
    {
      "task_path": "reports.tasks.send_daily_report",
      "args": ["ops@example.com"],
-     "kwargs": {"dry_run": false}
+     "kwargs": {"dry_run": false},
+     "activity_timeout_seconds": 86400.0
    }
 
 ``task_path`` is ``Task.module_path`` (``func.__module__`` plus
@@ -49,7 +50,8 @@ Run flow
    workflow's start delay, and the mapped task priority is applied to the
    workflow start.
 3. A worker polling ``task.queue_name`` runs the workflow, which schedules
-   ``run_task`` as an activity with a 24-hour start-to-close timeout and
+   ``run_task`` as an activity with the start-to-close timeout from the backend's
+   ``ACTIVITY_TIMEOUT`` (24 hours by default) and
    ``RetryPolicy(maximum_attempts=1)``.
 4. ``run_task`` resolves the task, builds a ``TaskContext`` when the task takes
    context, calls the function, and returns the value or re-raises the
@@ -120,9 +122,8 @@ Modules
 Limitations
 -----------
 
-* **No pruning.** Django does not track workflows, so nothing deletes old
-  executions; Temporal namespace retention does. Removed ``SCHEDULES`` entries
-  are likewise not deleted from Temporal.
+* **Execution retention is Temporal's.** Django does not track workflows, so
+  nothing deletes old executions; Temporal namespace retention does.
 * **Priority depends on the server.** Temporal servers must support priority
   for the mapped priority key to have any effect.
 * **Result reads cost a round trip.** ``get_result()`` hits the server and, for
@@ -133,8 +134,10 @@ Limitations
 * **JSON arguments only.** Args and kwargs must survive JSON serialization.
 * **No Django-facing workflow start API.** Custom workflows are started with
   the ``temporalio`` client directly.
-* **Fixed activity timeout.** Tasks that legitimately run longer than 24 hours
-  time out; the timeout is not configurable through Django task settings.
+* **Custom-workflow timeout is fixed.** Activities started by
+  ``execute_task`` use a 24-hour start-to-close timeout. ``ACTIVITY_TIMEOUT``
+  applies only to enqueued and scheduled tasks, because a workflow's timeout
+  must stay fixed across replays.
 * **Code changes must be compatible with in-flight work.** Workers replay open
   workflows, so workflow code and task import paths must remain stable while
   executions are running.

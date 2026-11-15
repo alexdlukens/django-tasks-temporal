@@ -103,14 +103,39 @@ options, then creates each Temporal Schedule. If a schedule with the same id
 already exists, it is updated in place with the new action, spec, and paused
 state. It prints each synced schedule id, in configuration order.
 
-Syncing is create-or-update, not a full synchronization:
+Pruning removed schedules
+-------------------------
 
-* Entries removed from ``SCHEDULES`` are **not** deleted from Temporal. The
-  existing schedule keeps running until you delete it manually (for example
-  with the Temporal CLI) or the namespace is cleaned up. Pruning removed
-  schedules is a current limitation.
+By default syncing is create-or-update and never deletes anything. Pass
+``--prune`` to also delete the Temporal Schedules this backend created for the
+selected alias that are no longer declared:
+
+.. code-block:: console
+
+   python manage.py sync_temporal_schedules --backend default --prune
+
+The command then prints each deleted id prefixed with ``pruned``.
+
+Every schedule the command creates or updates carries an ownership marker in
+its start-workflow action memo: the key ``django_tasks_temporal`` with the
+backend alias as the value. Pruning lists the schedules in the namespace,
+ignores any that do not start
+``django_tasks_temporal.DjangoTaskWorkflow`` or whose marker does not name the
+selected backend alias, and deletes the remaining ids that are not in the
+current ``SCHEDULES``. Two backend aliases can therefore share a namespace
+without pruning each other's schedules. With an empty ``SCHEDULES``, pruning
+removes every schedule previously managed for that alias.
+
+Schedules created before this marker existed carry no marker and are never
+pruned (a later sync that updates them does add the marker). They are
+indistinguishable from schedules created outside this backend, so delete them
+manually (for example with the Temporal CLI) or let the namespace be cleaned
+up.
+
+Other caveats:
+
 * Entries are not renamed. Changing an entry's ``id`` creates a new schedule
-  and leaves the old one running.
+  under the new id; the old schedule is pruned on the next ``--prune`` run.
 * Schedules are only pushed when the command runs. Changing settings does not
   update Temporal by itself; run the command as part of deployment.
 

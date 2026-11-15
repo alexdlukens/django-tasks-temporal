@@ -34,6 +34,7 @@ from temporalio.types import ClassType
 
 from ._shared import (
     ACTIVITY_NAME,
+    DEFAULT_ACTIVITY_TIMEOUT_SECONDS,
     WORKFLOW_NAME,
     TaskInput,
     temporal_priority_key,
@@ -46,9 +47,10 @@ with temporal_workflow.unsafe.imports_passed_through():
     from django.tasks import TaskContext, TaskResult, TaskResultStatus
     from django.utils.module_loading import import_string
 
-#: Temporal requires an explicit timeout for every activity; Django tasks have
-#: no timeout concept, so we pick a generous upper bound.
-DEFAULT_ACTIVITY_TIMEOUT = timedelta(hours=24)
+#: Start-to-close timeout for activities that user workflows start with
+#: :py:func:`execute_task`. Enqueued and scheduled tasks use the timeout carried
+#: in their ``TaskInput`` instead, set by the backend's ``ACTIVITY_TIMEOUT``.
+DEFAULT_ACTIVITY_TIMEOUT = timedelta(seconds=DEFAULT_ACTIVITY_TIMEOUT_SECONDS)
 
 _REGISTERED_WORKFLOWS: list[type] = []
 
@@ -146,7 +148,9 @@ class DjangoTaskWorkflow:
         return await temporal_workflow.execute_activity(
             ACTIVITY_NAME,
             task_input,
-            start_to_close_timeout=DEFAULT_ACTIVITY_TIMEOUT,
+            start_to_close_timeout=timedelta(
+                seconds=task_input.activity_timeout_seconds
+            ),
             # Django has no automatic retry semantics; Temporal's default is
             # unlimited retries, so opt out explicitly.
             retry_policy=RetryPolicy(maximum_attempts=1),

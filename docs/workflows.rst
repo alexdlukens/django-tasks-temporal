@@ -73,8 +73,9 @@ Details:
   activity's ``task_queue``, so a worker must be serving that queue.
 * The task's ``priority`` is mapped to a Temporal activity priority exactly as
   it is for enqueued tasks (see :doc:`activities`).
-* The activity uses the same 24-hour start-to-close timeout and
-  ``maximum_attempts=1`` retry policy as the backend's generic workflow.
+* The activity uses the fixed 24-hour start-to-close timeout
+  (``DEFAULT_ACTIVITY_TIMEOUT``) and the ``maximum_attempts=1`` retry policy.
+  The backend's ``ACTIVITY_TIMEOUT`` does not apply here.
 * An exception from the task fails the activity; inside the workflow it
   surfaces as a ``temporalio.exceptions.ActivityError`` whose cause is the
   ``ApplicationError`` carrying the exception class path and traceback. Catch
