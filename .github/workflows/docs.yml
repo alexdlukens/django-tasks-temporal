@@ -28,7 +28,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      # No floating v10 major tag is published; pin the release tag.
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           version: "0.13.8"
           enable-cache: true
