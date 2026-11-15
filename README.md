@@ -55,5 +55,8 @@ finished = send_report.get_result(result.id)
 print(finished.return_value)
 ```
 
-Documentation sources live in `docs/` and build with Sphinx; Read the Docs
-configuration is `.readthedocs.yaml`.
+## Documentation
+
+Published at <https://alexdlukens.github.io/django-tasks-temporal/>. Sources
+live in `docs/` and build with Sphinx; the `Docs` workflow deploys them to
+GitHub Pages. Read the Docs configuration remains in `.readthedocs.yaml`.
