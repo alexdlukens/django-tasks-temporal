@@ -55,6 +55,23 @@ finished = send_report.get_result(result.id)
 print(finished.return_value)
 ```
 
+## Release
+
+Two entry points, both publishing a wheel and sdist on the GitHub release:
+
+- **Actions → Bump version → Run workflow**, with the version in the `version`
+  input (e.g. `0.2.0`). That workflow sets `pyproject.toml` and `uv.lock` to the
+  version, commits to the default branch, creates the annotated tag `v0.2.0`,
+  pushes both atomically, then runs the `Release` workflow for the tag.
+- **Push a `v*` tag** yourself (`git tag -a v0.2.0 && git push origin v0.2.0`).
+  `Release` derives the version from the tag (`v0.2.0` → `0.2.0`), builds, and
+  creates or updates the release.
+
+The version must be canonical PEP 440 (`0.2.0`, `0.3.0rc1`); inputs that would
+normalize (`v0.2.0`, `0.3.0-rc`) are rejected, as is a tag that already exists
+on `origin`. Tag pushes made with `GITHUB_TOKEN` do not trigger `push`
+workflows, so `Bump version` calls `Release` directly via `workflow_call`.
+
 ## Documentation
 
 Published at <https://alexdlukens.github.io/django-tasks-temporal/>. Sources

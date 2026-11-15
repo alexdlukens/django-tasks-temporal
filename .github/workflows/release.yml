@@ -1,0 +1,68 @@
+name: Release
+
+# Builds the wheel/sdist for a tag and attaches them to the GitHub release.
+# Tag pushes made with GITHUB_TOKEN (e.g. by Bump version) do not trigger
+# `push` events, so that workflow calls this one via `workflow_call`.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag whose commit is built and attached to the release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.13.8"
+
+      - name: Set version from tag
+        id: version
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          uv version --no-sync "${tag#v}"
+          version=$(uv version --short --no-sync)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Smoke-test the wheel
+        env:
+          EXPECTED: ${{ steps.version.outputs.version }}
+        run: |
+          uv run --no-project --with dist/*.whl python -c \
+            "import os, django_tasks_temporal, importlib.metadata as m; \
+             got = m.version('django-tasks-temporal'); \
+             assert got == os.environ['EXPECTED'], (got, os.environ['EXPECTED']); \
+             print('wheel version:', got)"
+
+      - name: Attach dists to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # Create the release if it does not exist yet; tolerate a concurrent
+          # creator (e.g. the Bump version workflow) winning the race.
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG" ||
+            gh release view "$TAG" >/dev/null
+          gh release upload "$TAG" dist/*.whl dist/*.tar.gz --clobber
