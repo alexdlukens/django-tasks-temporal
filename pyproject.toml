@@ -1,6 +1,6 @@
 [project]
 name = "django-tasks-temporal"
-version = "0.1.0"
+version = "0.1.1"
 description = "Django tasks backend that runs tasks on Temporal."
 readme = "README.md"
 authors = [
