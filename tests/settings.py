@@ -3,11 +3,37 @@ import os
 SECRET_KEY = "django-tasks-temporal-tests"
 DEBUG = True
 USE_TZ = True
+ROOT_URLCONF = "tests.urls"
+STATIC_URL = "static/"
 
 INSTALLED_APPS = [
-    "django.contrib.contenttypes",
+    "django.contrib.admin",
     "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django_tasks_temporal",
     "tests.app",
+]
+
+MIDDLEWARE = [
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+]
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ]
+        },
+    }
 ]
 
 DATABASES = {
@@ -26,13 +52,17 @@ TASKS = {
     "default": {
         "BACKEND": BACKEND,
         "QUEUES": ["default", "high"],
-        "OPTIONS": {"ADDRESS": TEMPORAL_TEST_ADDRESS},
+        "OPTIONS": {
+            "ADDRESS": TEMPORAL_TEST_ADDRESS,
+            "WEB_UI_URL": "http://localhost:8233",
+        },
     },
     "scheduled": {
         "BACKEND": BACKEND,
         "QUEUES": ["default"],
         "OPTIONS": {
             "ADDRESS": TEMPORAL_TEST_ADDRESS,
+            "WEB_UI_URL": "http://localhost:8233",
             "SCHEDULES": [
                 {
                     "id": "test-every-paused",

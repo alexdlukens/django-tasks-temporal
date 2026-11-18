@@ -122,6 +122,27 @@ def test_api_key_enables_tls() -> None:
     assert options.tls is True
 
 
+def test_web_ui_url_is_optional() -> None:
+    assert TemporalOptions.from_mapping({}).web_ui_url is None
+
+
+def test_web_ui_url_trailing_slash_is_removed() -> None:
+    options = TemporalOptions.from_mapping(
+        {"WEB_UI_URL": "https://temporal.example.com/ui/"}
+    )
+
+    assert options.web_ui_url == "https://temporal.example.com/ui"
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "temporal.example.com", "/temporal", "javascript:alert(1)", 1],
+)
+def test_web_ui_url_must_be_http_url(value: Any) -> None:
+    with pytest.raises(ImproperlyConfigured, match="WEB_UI_URL"):
+        TemporalOptions.from_mapping({"WEB_UI_URL": value})
+
+
 def test_api_key_rejects_explicitly_disabled_tls() -> None:
     with pytest.raises(ImproperlyConfigured, match="requires TLS"):
         TemporalOptions.from_mapping({"API_KEY": "secret", "TLS": False})

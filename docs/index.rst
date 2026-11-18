@@ -29,6 +29,8 @@ Features
   declared schedules.
 * Result retrieval, including task arguments, attempts, worker identities, and
   failure tracebacks reconstructed from Temporal workflow history.
+* An optional read-only Django admin page listing recent workflow executions
+  and schedules, with links to the Temporal Web UI.
 * Priority, ``run_after`` deferral, and ``takes_context`` support through
   Django's task API.
 
@@ -46,6 +48,7 @@ Features
    activities
    workflows
    schedules
+   admin
    workers
    results
    architecture

@@ -1,9 +1,9 @@
 """Temporal connection options and client construction.
 
-Options live in ``TASKS[alias]["OPTIONS"]``. Only connection-related keys are
-read here; ``SCHEDULES`` and ``ACTIVITY_TIMEOUT`` are consumed by
-:mod:`django_tasks_temporal.schedules` and the enqueue path and are ignored
-by the parser.
+Options live in ``TASKS[alias]["OPTIONS"]``. Only connection-related keys and
+the admin's ``WEB_UI_URL`` are read here; ``SCHEDULES`` and
+``ACTIVITY_TIMEOUT`` are consumed by :mod:`django_tasks_temporal.schedules` and
+the enqueue path and are ignored by the parser.
 """
 
 import asyncio
@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import temporalio.client
 import temporalio.service
@@ -29,9 +30,9 @@ DEFAULT_TLS = False
 _MAX_ACTIVITY_TIMEOUT_SECONDS = 10_000 * 365 * 24 * 60 * 60
 
 _CONNECTION_KEYS = frozenset({"ADDRESS", "NAMESPACE", "TLS", "API_KEY"})
-# Consumed by the scheduler and the enqueue path; accepted here so it is not
-# treated as a typo.
-_IGNORED_KEYS = frozenset({"SCHEDULES", "ACTIVITY_TIMEOUT"})
+# Consumed by the scheduler, the enqueue path, and the admin; accepted here so
+# they are not treated as typos.
+_IGNORED_KEYS = frozenset({"SCHEDULES", "ACTIVITY_TIMEOUT", "WEB_UI_URL"})
 _TLS_KEYS = frozenset(
     {"server_root_ca_cert", "client_cert", "client_private_key", "domain"}
 )
@@ -123,6 +124,8 @@ class TemporalOptions:
     namespace: str
     tls: bool | TLSFiles
     api_key: str | None = None
+    # Base URL of the Temporal Web UI, used by the optional Django admin page.
+    web_ui_url: str | None = None
 
     @classmethod
     def from_mapping(cls, options: Mapping[str, Any]) -> "TemporalOptions":
@@ -163,7 +166,27 @@ class TemporalOptions:
             # An API key is a bearer credential: never send it without TLS.
             tls = True if api_key is not None else DEFAULT_TLS
 
-        return cls(address=address, namespace=namespace, tls=tls, api_key=api_key)
+        web_ui_url = options.get("WEB_UI_URL")
+        if web_ui_url is not None:
+            parsed = urlsplit(web_ui_url) if isinstance(web_ui_url, str) else None
+            if (
+                parsed is None
+                or parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+            ):
+                raise ImproperlyConfigured(
+                    "The Temporal task backend WEB_UI_URL option must be an "
+                    f"http:// or https:// URL, got {web_ui_url!r}."
+                )
+            web_ui_url = web_ui_url.rstrip("/")
+
+        return cls(
+            address=address,
+            namespace=namespace,
+            tls=tls,
+            api_key=api_key,
+            web_ui_url=web_ui_url,
+        )
 
 
 def get_options(alias: str) -> TemporalOptions:

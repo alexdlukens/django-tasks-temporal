@@ -40,9 +40,10 @@ arbitrary; the examples use ``default``.
        },
    }
 
-``"django_tasks_temporal"`` in ``INSTALLED_APPS`` is required only for the
+``"django_tasks_temporal"`` in ``INSTALLED_APPS`` is required for the
 management commands (``run_temporal_worker`` and
-``sync_temporal_schedules``); the backend itself is imported by dotted path.
+``sync_temporal_schedules``) and the optional Django admin page (see
+:doc:`admin`); the backend itself is imported by dotted path.
 
 ``QUEUES``
 ----------
@@ -97,6 +98,13 @@ The worker command serves every configured queue unless ``--queue`` is passed
        scheduled task, as a ``timedelta`` or a number of seconds. A task still
        running after this long is timed out and its workflow fails. Applies
        to tasks started by this backend, not to ``execute_task`` calls.
+   * - ``WEB_UI_URL``
+     - ``str``
+     - ``None``
+     - Base URL of the Temporal Web UI, for example
+       ``"http://localhost:8233"``. When set, the optional Django admin page
+       links workflow executions and schedules to that UI. See
+       :doc:`admin`.
    * - ``SCHEDULES``
      - ``list``
      - ``[]``
@@ -105,7 +113,8 @@ The worker command serves every configured queue unless ``--queue`` is passed
 
 Unknown option keys raise ``django.core.exceptions.ImproperlyConfigured``
 instead of being silently ignored. ``SCHEDULES`` is consumed by the scheduler,
-and ``ACTIVITY_TIMEOUT`` by the enqueue path.
+``ACTIVITY_TIMEOUT`` by the enqueue path, and ``WEB_UI_URL`` by the Django
+admin.
 
 Each ``SCHEDULES`` entry accepts these keys:
 

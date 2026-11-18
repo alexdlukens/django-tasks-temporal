@@ -1,0 +1,95 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div id="content-main">
+  <h1>Temporal</h1>
+  {% for overview in overviews %}
+    <div class="module">
+      <h2>
+        {{ overview.alias }}
+        {% if overview.namespace %}<span class="quiet">({{ overview.namespace }})</span>{% endif %}
+        {% if overview.web_ui_url %}
+          <a class="button" href="{{ overview.web_ui_url }}" target="_blank" rel="noopener">Open Temporal UI</a>
+        {% endif %}
+      </h2>
+
+      {% if overview.error %}
+        <p class="errornote">{{ overview.error }}</p>
+      {% endif %}
+
+      <h3>Workflow executions</h3>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Workflow ID</th>
+            <th scope="col">Type</th>
+            <th scope="col">Status</th>
+            <th scope="col">Task queue</th>
+            <th scope="col">Started</th>
+            <th scope="col">Closed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for workflow in overview.workflows %}
+            <tr>
+              <td>
+                {% if workflow.url %}
+                  <a href="{{ workflow.url }}" target="_blank" rel="noopener">{{ workflow.id }}</a>
+                {% else %}
+                  {{ workflow.id }}
+                {% endif %}
+              </td>
+              <td>{{ workflow.workflow_type }}</td>
+              <td>{{ workflow.status }}</td>
+              <td>{{ workflow.task_queue }}</td>
+              <td>{{ workflow.start_time|date:"Y-m-d H:i:s" }}</td>
+              <td>{% if workflow.close_time %}{{ workflow.close_time|date:"Y-m-d H:i:s" }}{% else %}—{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6">No workflow executions.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h3>Schedules</h3>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Schedule ID</th>
+            <th scope="col">Task</th>
+            <th scope="col">Cadence</th>
+            <th scope="col">State</th>
+            <th scope="col">Next action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for schedule in overview.schedules %}
+            <tr>
+              <td>
+                {% if schedule.url %}
+                  <a href="{{ schedule.url }}" target="_blank" rel="noopener">{{ schedule.id }}</a>
+                {% else %}
+                  {{ schedule.id }}
+                {% endif %}
+              </td>
+              <td>{{ schedule.task|default:"—" }}</td>
+              <td>{{ schedule.cadence|default:"—" }}</td>
+              <td>
+                {% if schedule.paused is None %}—
+                {% elif schedule.paused %}Paused
+                {% else %}Running
+                {% endif %}
+              </td>
+              <td>{% if schedule.next_action_time %}{{ schedule.next_action_time|date:"Y-m-d H:i:s" }}{% else %}—{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5">No schedules.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% empty %}
+    <p>No Temporal task backends are configured.</p>
+  {% endfor %}
+</div>
+{% endblock %}
