@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
-from django.tasks import TaskResultStatus
+from django.tasks import TaskResultStatus, task_backends
 from django.test import Client
 from django.urls import reverse
 
@@ -37,6 +37,17 @@ def test_overview_lists_recent_workflows_with_web_ui_links(db):
     assert (
         f"{WEB_UI_URL}/namespaces/default/workflows/{result.id}/" in content
     )
+
+
+def test_overview_hides_configuration_details(db, monkeypatch):
+    monkeypatch.setitem(task_backends["default"].options, "API_KEY", b"super-secret")
+
+    response = _admin_client().get(reverse(OVERVIEW_URL))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Temporal options are invalid" in content
+    assert "super-secret" not in content
 
 
 def test_overview_lists_schedules_with_web_ui_links(db):

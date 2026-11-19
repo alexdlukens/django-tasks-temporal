@@ -21,6 +21,7 @@ from temporalio.client import (
     Schedule,
     ScheduleActionStartWorkflow,
     ScheduleAlreadyRunningError,
+    ScheduleDescription,
     ScheduleIntervalSpec,
     ScheduleListActionStartWorkflow,
     ScheduleSpec,
@@ -159,6 +160,29 @@ def _replacing(schedule: Schedule) -> Callable[[ScheduleUpdateInput], ScheduleUp
     return update
 
 
+_UNDECODABLE_OWNER = object()
+
+
+async def _schedule_owner(description: ScheduleDescription) -> Any:
+    """Return the marker value of a schedule, or ``None`` when unmarked.
+
+    Undecodable markers return a sentinel that compares unequal to every alias,
+    so foreign or malformed schedules are never adopted or pruned.
+    """
+    action = description.schedule.action
+    if not isinstance(action, ScheduleActionStartWorkflow):
+        return _UNDECODABLE_OWNER
+    memo = action.memo
+    payload = memo.get(MANAGED_MEMO_KEY) if memo else None
+    # describe() exposes the action memo as raw payloads.
+    if not isinstance(payload, Payload):
+        return None
+    try:
+        return (await description.data_converter.decode([payload]))[0]
+    except (KeyError, TypeError, ValueError):  # foreign encoding: fail closed
+        return _UNDECODABLE_OWNER
+
+
 def _build_schedule(
     task: Task, config: ScheduleConfig, alias: str, activity_timeout_seconds: float
 ) -> Schedule:
@@ -224,6 +248,24 @@ async def sync_schedules(alias: str) -> list[str]:
             await client.create_schedule(config.id, schedule)
         except ScheduleAlreadyRunningError:
             handle = client.get_schedule_handle(config.id)
+            description = await handle.describe()
+            action = description.schedule.action
+            if (
+                not isinstance(action, ScheduleActionStartWorkflow)
+                or action.workflow != WORKFLOW_NAME
+            ):
+                raise ImproperlyConfigured(
+                    f"Temporal Schedule {config.id!r} already exists and is not "
+                    "a Django task schedule; refusing to overwrite it."
+                )
+            owner = await _schedule_owner(description)
+            if owner is _UNDECODABLE_OWNER or (
+                owner is not None and owner != alias
+            ):
+                raise ImproperlyConfigured(
+                    f"Temporal Schedule {config.id!r} is managed by another "
+                    "backend or deployment; refusing to overwrite it."
+                )
             await handle.update(_replacing(schedule))
         synced.append(config.id)
     return synced
@@ -252,15 +294,7 @@ async def prune_schedules(alias: str, keep_ids: Iterable[str]) -> list[str]:
             continue
 
         description = await client.get_schedule_handle(entry.id).describe()
-        action = description.schedule.action
-        if not isinstance(action, ScheduleActionStartWorkflow):
-            continue
-        memo = action.memo
-        payload = memo.get(MANAGED_MEMO_KEY) if memo else None
-        # describe() exposes the action memo as raw payloads.
-        if not isinstance(payload, Payload):
-            continue
-        owner = (await description.data_converter.decode([payload]))[0]
+        owner = await _schedule_owner(description)
         if owner != alias:
             continue
 

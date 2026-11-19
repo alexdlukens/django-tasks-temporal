@@ -19,6 +19,9 @@ DEFAULT_BACKEND_ALIAS = "default"
 # Activity start-to-close timeout, in seconds, when ACTIVITY_TIMEOUT is unset.
 DEFAULT_ACTIVITY_TIMEOUT_SECONDS = 24 * 60 * 60
 
+# Largest duration Temporal's protobuf Duration can carry (10,000 years).
+MAX_ACTIVITY_TIMEOUT_SECONDS = 10_000 * 365 * 24 * 60 * 60
+
 
 @dataclass(frozen=True, slots=True)
 class TaskInput:

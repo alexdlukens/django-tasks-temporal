@@ -141,12 +141,17 @@ async def _overview_for(alias: str) -> AliasOverview:
     try:
         options = get_options(alias)
         configs = {config.id: config for config in parse_schedules(alias)}
-    except ImproperlyConfigured as exc:
+    except ImproperlyConfigured:
+        logger.warning(
+            "Invalid Temporal options for the task backend %r.",
+            alias,
+            exc_info=True,
+        )
         return AliasOverview(
             alias=alias,
             namespace="",
             web_ui_url=None,
-            error=str(exc) or type(exc).__name__,
+            error="Temporal options are invalid; see the server log.",
         )
 
     try:
@@ -160,7 +165,7 @@ async def _overview_for(alias: str) -> AliasOverview:
             schedules.append(_schedule_row(options, entry, configs))
             if len(schedules) >= SCHEDULE_LIMIT:
                 break
-    except Exception as exc:  # the admin must render any failure
+    except Exception:  # the admin must render any failure
         logger.warning(
             "Could not read Temporal data for the task backend %r.",
             alias,
@@ -170,7 +175,7 @@ async def _overview_for(alias: str) -> AliasOverview:
             alias=alias,
             namespace=options.namespace,
             web_ui_url=_web_ui_url(options, "workflows"),
-            error=str(exc) or type(exc).__name__,
+            error="Could not read Temporal data; see the server log.",
         )
 
     schedules.sort(key=lambda row: row.id)

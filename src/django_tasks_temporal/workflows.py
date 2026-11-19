@@ -35,6 +35,7 @@ from temporalio.types import ClassType
 from ._shared import (
     ACTIVITY_NAME,
     DEFAULT_ACTIVITY_TIMEOUT_SECONDS,
+    MAX_ACTIVITY_TIMEOUT_SECONDS,
     WORKFLOW_NAME,
     TaskInput,
     temporal_priority_key,
@@ -51,6 +52,19 @@ with temporal_workflow.unsafe.imports_passed_through():
 #: :py:func:`execute_task`. Enqueued and scheduled tasks use the timeout carried
 #: in their ``TaskInput`` instead, set by the backend's ``ACTIVITY_TIMEOUT``.
 DEFAULT_ACTIVITY_TIMEOUT = timedelta(seconds=DEFAULT_ACTIVITY_TIMEOUT_SECONDS)
+_MAX_ACTIVITY_TIMEOUT = timedelta(seconds=MAX_ACTIVITY_TIMEOUT_SECONDS)
+
+
+def _activity_timeout(seconds: Any) -> timedelta:
+    """Normalize a wire-supplied timeout; forged values fall back to the default."""
+    try:
+        timeout = timedelta(seconds=seconds)
+    except (OverflowError, TypeError, ValueError):
+        return DEFAULT_ACTIVITY_TIMEOUT
+    if not timedelta(0) < timeout <= _MAX_ACTIVITY_TIMEOUT:
+        return DEFAULT_ACTIVITY_TIMEOUT
+    return timeout
+
 
 _REGISTERED_WORKFLOWS: list[type] = []
 
@@ -101,11 +115,34 @@ async def run_task(task_input: TaskInput) -> Any:
     ``TaskError`` objects for failed task results.
     """
     info = activity.info()
-    args = list(task_input.args)
-    kwargs = dict(task_input.kwargs)
 
     try:
-        task: DjangoTask = import_string(task_input.task_path)
+        if not isinstance(task_input.task_path, str) or not task_input.task_path:
+            raise ApplicationError(
+                "Task path must be a non-empty string.", non_retryable=True
+            )
+        if not isinstance(task_input.args, list) or not isinstance(
+            task_input.kwargs, dict
+        ):
+            raise ApplicationError(
+                "Task args must be a list and kwargs a dict.", non_retryable=True
+            )
+        args = list(task_input.args)
+        kwargs = dict(task_input.kwargs)
+
+        task = import_string(task_input.task_path)
+        if not isinstance(task, DjangoTask):
+            raise ApplicationError(
+                f"{task_input.task_path!r} is not a Django task.",
+                non_retryable=True,
+            )
+        if task.queue_name != info.task_queue:
+            raise ApplicationError(
+                f"Task {task_input.task_path!r} is bound to queue "
+                f"{task.queue_name!r}, not {info.task_queue!r}.",
+                non_retryable=True,
+            )
+
         if task.takes_context:
             # Django tasks only ever get a single attempt here (the workflow
             # sets maximum_attempts=1), but synthesize the worker ids from the
@@ -131,6 +168,8 @@ async def run_task(task_input: TaskInput) -> Any:
                 TaskContext(task_result=task_result), *args, **kwargs
             )
         return await task.acall(*args, **kwargs)
+    except ApplicationError:
+        raise
     except Exception as exc:
         raise ApplicationError(
             str(exc),
@@ -148,8 +187,8 @@ class DjangoTaskWorkflow:
         return await temporal_workflow.execute_activity(
             ACTIVITY_NAME,
             task_input,
-            start_to_close_timeout=timedelta(
-                seconds=task_input.activity_timeout_seconds
+            start_to_close_timeout=_activity_timeout(
+                task_input.activity_timeout_seconds
             ),
             # Django has no automatic retry semantics; Temporal's default is
             # unlimited retries, so opt out explicitly.

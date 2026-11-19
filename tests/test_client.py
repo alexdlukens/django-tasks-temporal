@@ -115,6 +115,28 @@ def test_tls_mapping_validation(tls: dict[str, Any], message: str) -> None:
         TemporalOptions.from_mapping({"TLS": tls})
 
 
+@pytest.mark.parametrize(
+    "address", ["http://localhost:7233", "https://temporal.example.com:7233"]
+)
+def test_address_rejects_url_schemes(address: str) -> None:
+    with pytest.raises(ImproperlyConfigured, match="without a URL scheme"):
+        TemporalOptions.from_mapping({"ADDRESS": address})
+
+
+def test_api_key_is_not_echoed_in_validation_errors() -> None:
+    with pytest.raises(ImproperlyConfigured) as exc_info:
+        TemporalOptions.from_mapping({"API_KEY": b"super-secret"})
+
+    assert "super-secret" not in str(exc_info.value)
+
+
+def test_api_key_is_hidden_from_repr() -> None:
+    options = TemporalOptions.from_mapping({"API_KEY": "super-secret"})
+
+    assert "super-secret" not in repr(options)
+    assert options.api_key == "super-secret"
+
+
 def test_api_key_enables_tls() -> None:
     options = TemporalOptions.from_mapping({"API_KEY": "secret"})
 

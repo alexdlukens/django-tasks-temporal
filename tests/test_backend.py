@@ -2,6 +2,7 @@ import time
 import uuid
 from datetime import timedelta
 
+import pytest
 from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.tasks import TaskResult, TaskResultStatus, task_backends
@@ -66,6 +67,24 @@ def test_unknown_result_id_raises_does_not_exist():
     except TaskResultDoesNotExist:
         return
     raise AssertionError("get_result did not raise TaskResultDoesNotExist")
+
+
+def test_foreign_workflow_is_not_returned_as_a_task_result():
+    result_id = uuid.uuid4().hex
+
+    async def start() -> None:
+        client = await Client.connect(settings.TEMPORAL_TEST_ADDRESS)
+        await client.start_workflow(
+            AddTwiceWorkflow.run,
+            args=[1, 2],
+            id=result_id,
+            task_queue="default",
+        )
+
+    async_to_sync(start)()
+
+    with pytest.raises(TaskResultDoesNotExist):
+        task_backends["default"].get_result(result_id)
 
 
 def test_deferred_task_is_ready_until_run_after_then_runs():

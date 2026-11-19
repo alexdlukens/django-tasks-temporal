@@ -44,8 +44,11 @@ Permissions
 
 The page is backed by an unmanaged, table-less model, so it behaves like any
 other admin model: users need the *Can view Temporal* permission (or
-superuser status). It is read-only; adding, changing, and deleting are
-disabled.
+superuser status). That permission covers every Temporal backend alias and
+namespace configured in the project. It is read-only; adding, changing, and
+deleting are disabled.
 
-If the Temporal server cannot be reached, the page shows the connection error
-for the affected alias instead of failing the admin request.
+If the Temporal server cannot be reached, or an alias has invalid options, the
+page shows a generic error for that alias instead of failing the admin
+request. The exception, including paths and connection details, is written to
+the server log. See :doc:`security`.

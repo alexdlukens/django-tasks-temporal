@@ -10,7 +10,7 @@ import asyncio
 import math
 import weakref
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -21,13 +21,11 @@ import temporalio.service
 from django.core.exceptions import ImproperlyConfigured
 from django.tasks import task_backends
 
-from ._shared import DEFAULT_ACTIVITY_TIMEOUT_SECONDS
+from ._shared import DEFAULT_ACTIVITY_TIMEOUT_SECONDS, MAX_ACTIVITY_TIMEOUT_SECONDS
 
 DEFAULT_ADDRESS = "localhost:7233"
 DEFAULT_NAMESPACE = "default"
 DEFAULT_TLS = False
-# Largest duration Temporal's protobuf Duration can carry (10,000 years).
-_MAX_ACTIVITY_TIMEOUT_SECONDS = 10_000 * 365 * 24 * 60 * 60
 
 _CONNECTION_KEYS = frozenset({"ADDRESS", "NAMESPACE", "TLS", "API_KEY"})
 # Consumed by the scheduler, the enqueue path, and the admin; accepted here so
@@ -123,7 +121,8 @@ class TemporalOptions:
     address: str
     namespace: str
     tls: bool | TLSFiles
-    api_key: str | None = None
+    # Never include the bearer token in repr(), which often reaches logs.
+    api_key: str | None = field(default=None, repr=False)
     # Base URL of the Temporal Web UI, used by the optional Django admin page.
     web_ui_url: str | None = None
 
@@ -145,6 +144,13 @@ class TemporalOptions:
                 "The Temporal task backend ADDRESS option must be a non-empty "
                 f"string, got {address!r}."
             )
+        if "://" in address:
+            # The SDK treats a scheme as a full URL and drops the bool TLS
+            # setting, which would send API_KEY over cleartext.
+            raise ImproperlyConfigured(
+                "The Temporal task backend ADDRESS option must be 'host:port' "
+                f"without a URL scheme, got {address!r}."
+            )
 
         namespace = options.get("NAMESPACE", DEFAULT_NAMESPACE)
         if not isinstance(namespace, str) or not namespace:
@@ -157,7 +163,7 @@ class TemporalOptions:
         if api_key is not None and (not isinstance(api_key, str) or not api_key):
             raise ImproperlyConfigured(
                 "The Temporal task backend API_KEY option must be a non-empty "
-                f"string, got {api_key!r}."
+                f"string, got {type(api_key).__name__}."
             )
 
         if "TLS" in options:
@@ -202,7 +208,7 @@ def _parse_activity_timeout(value: Any) -> float:
         seconds = float(value)
     else:
         seconds = math.nan
-    if not 0 < seconds <= _MAX_ACTIVITY_TIMEOUT_SECONDS:
+    if not 0 < seconds <= MAX_ACTIVITY_TIMEOUT_SECONDS:
         raise ImproperlyConfigured(
             "The Temporal task backend ACTIVITY_TIMEOUT option must be a positive "
             f"timedelta or number of seconds, got {value!r}."

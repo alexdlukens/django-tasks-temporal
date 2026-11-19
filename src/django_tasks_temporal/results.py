@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 import temporalio.api.history.v1
 import temporalio.api.workflow.v1
 import temporalio.client
+from django.tasks import Task as DjangoTask
 from django.tasks import TaskResult, TaskResultStatus
 from django.tasks.base import TaskError
 from django.tasks.exceptions import TaskResultDoesNotExist
@@ -23,7 +24,7 @@ from temporalio.converter import DataConverter
 from temporalio.exceptions import ApplicationError
 from temporalio.service import RPCError, RPCStatusCode
 
-from ._shared import TaskInput
+from ._shared import WORKFLOW_NAME, TaskInput
 
 _FAILED_STATUSES = frozenset(
     {
@@ -66,6 +67,11 @@ async def fetch_task_result(
             ) from exc
         raise
 
+    if description.workflow_type != WORKFLOW_NAME:
+        # A workflow whose payload merely looks like TaskInput is not a task
+        # result, and must not be read as one.
+        raise TaskResultDoesNotExist(f"No task result with id {result_id!r}.")
+
     history = await handle.fetch_history()
     task_input = await _read_task_input(history, description.data_converter)
     attempts = _activity_attempts(
@@ -83,8 +89,15 @@ async def fetch_task_result(
         except WorkflowFailureError as exc:
             errors.append(_task_error(exc))
 
+    task = import_string(task_input.task_path)
+    if not isinstance(task, DjangoTask):
+        raise TypeError(
+            f"Workflow {result_id!r} resolves {task_input.task_path!r} to a "
+            "non-Task object."
+        )
+
     result = TaskResult(
-        task=import_string(task_input.task_path),
+        task=task,
         id=result_id,
         status=status,
         enqueued_at=description.start_time,

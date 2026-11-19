@@ -100,8 +100,12 @@ Schedules are applied by the ``sync_temporal_schedules`` management command:
 
 The command validates every entry, connects with the backend's connection
 options, then creates each Temporal Schedule. If a schedule with the same id
-already exists, it is updated in place with the new action, spec, and paused
-state. It prints each synced schedule id, in configuration order.
+already exists, it is accepted only when it is a
+``DjangoTaskWorkflow`` schedule carrying no marker or this backend alias's
+marker; it is then updated in place with the new action, spec, and paused
+state. A schedule owned by another alias, or any other workflow type, raises
+``django.core.exceptions.ImproperlyConfigured`` instead of being overwritten.
+It prints each synced schedule id, in configuration order.
 
 Pruning removed schedules
 -------------------------
@@ -125,6 +129,11 @@ selected backend alias, and deletes the remaining ids that are not in the
 current ``SCHEDULES``. Two backend aliases can therefore share a namespace
 without pruning each other's schedules. With an empty ``SCHEDULES``, pruning
 removes every schedule previously managed for that alias.
+
+The marker names the alias, not the deployment. Deployments that share a
+namespace and use the same alias are treated as one owner and can prune each
+other's schedules; give each deployment a distinct alias or namespace. See
+:doc:`security` for the full trust model.
 
 Schedules created before this marker existed carry no marker and are never
 pruned (a later sync that updates them does add the marker). They are

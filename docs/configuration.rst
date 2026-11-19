@@ -70,7 +70,9 @@ The worker command serves every configured queue unless ``--queue`` is passed
    * - ``ADDRESS``
      - ``str``
      - ``"localhost:7233"``
-     - gRPC address of the Temporal frontend, as ``host:port``.
+     - gRPC address of the Temporal frontend, as ``host:port`` without a URL
+       scheme. Scheme-prefixed values are rejected because the SDK would drop
+       the boolean TLS setting and could send ``API_KEY`` over cleartext.
    * - ``NAMESPACE``
      - ``str``
      - ``"default"``

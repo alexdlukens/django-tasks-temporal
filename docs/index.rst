@@ -52,6 +52,7 @@ Features
    workers
    results
    architecture
+   security
    development
    api
 

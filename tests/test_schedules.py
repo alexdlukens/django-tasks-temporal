@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 from asgiref.sync import async_to_sync
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.tasks import task_backends
 from temporalio.client import (
     Client,
@@ -92,6 +93,35 @@ def test_sync_creates_schedules_and_is_idempotent():
     assert calendar.hour == (ScheduleRange(start=9, end=9, step=1),)
     assert calendar.minute == (ScheduleRange(start=0, end=0, step=1),)
     assert cron.schedule.state.paused is False
+
+
+def test_sync_refuses_to_overwrite_another_aliases_schedule():
+    backend = task_backends["scheduled"]
+    original = backend.options["SCHEDULES"]
+    schedule_id = f"test-conflict-{uuid.uuid4().hex}"
+
+    async def run() -> None:
+        client = await Client.connect(settings.TEMPORAL_TEST_ADDRESS)
+        try:
+            await client.create_schedule(
+                schedule_id,
+                _direct_schedule(schedule_id, {MANAGED_MEMO_KEY: "other"}),
+            )
+            backend.options["SCHEDULES"] = [
+                {
+                    "id": schedule_id,
+                    "task": "tests.app.tasks.scheduled_tick",
+                    "every": 3600,
+                }
+            ]
+            with pytest.raises(ImproperlyConfigured, match="another backend"):
+                await sync_schedules("scheduled")
+        finally:
+            backend.options["SCHEDULES"] = original
+            with suppress(RPCError):
+                await client.get_schedule_handle(schedule_id).delete()
+
+    async_to_sync(run)()
 
 
 def test_prune_deletes_managed_schedules_no_longer_declared():
